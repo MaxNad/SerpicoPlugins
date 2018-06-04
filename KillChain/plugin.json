@@ -1,0 +1,8 @@
+{
+  "name": "KillChain",
+  "description": "A pentest kill chain flow diagram generation plugin.",
+  "link": "/KillChain",
+  "enabled": true,
+  "report_view": true,
+  "admin_view": false
+}

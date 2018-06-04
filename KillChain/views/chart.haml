@@ -1,0 +1,161 @@
+.span10
+  .row
+    %input#newAsset{ :type => "text" }
+    %br
+    %button#btnAddAsset Add Asset
+
+    %br
+    %br
+
+    %select#newAttack
+      - @findings.each do |item|
+        %option #{item['title']}
+    %br
+    %button#btnAddThreatVector Add Threat Vector
+
+  .mermaid#svg
+
+  %form#formSVG{ :method => "POST" }
+    %input#svgText{ :name => "svgText", :type => "hidden" }
+
+    %br
+    %input{:type => "hidden", :name => "report_id", :value => "#{@report_id}"}
+    %input.btn.btn-default#btnSubmit{ :type => "submit", :value => "Save" }
+    %a.btn.btn-default{ :href => "/" }
+      Cancel
+
+%script{ :src => "KillChain/public/mermaid.min.js" }
+%script{ :src => "KillChain/public/canvg.min.js" }
+
+:css
+  .mermaid .label text {
+    fill: #333;
+  }
+
+  #svg g.highlightMermaid > rect,
+  #svg g.highlightMermaid > circle {
+    stroke: #9ecaed;
+    stroke-width: 5px !important;
+    stroke-opacity: 0.6;
+  }
+
+:javascript
+
+  var clickedItem;
+
+  var elementCounter = 6;
+  var refreshCounter = 1;
+  var classDefs = `graph LR
+    classDef asset fill:#008000,stroke-width:0px;
+    classDef attack fill:#FF0000,stroke-width:0px;`;
+
+  var graph = `
+    id1((Start));`;
+
+  var classes = `
+    class id0 asset;
+    class id0 attack;`;
+
+  $("#svg").html(classDefs + graph + classes);
+
+  var config = {
+    startOnLoad:true,
+    flowchart:{
+        useMaxWidth:false,
+        htmlLabels:false
+    }
+  };
+  mermaid.initialize(config);
+
+  $("#formSVG").on("submit", updateSVG);
+  $("#btnAddAsset").on("click", addAsset);
+  $("#btnAddThreatVector").on("click", addThreatVector);
+
+  $(document).keyup(function(e) {
+       if (e.keyCode == 27) { // escape key maps to keycode `27`
+          clickedItem = null;
+          $(".highlightMermaid").removeClass("highlightMermaid");
+      }
+  });
+
+  function makeCSSInline() {
+    var stylesheets = document.styleSheets;
+    for (var index = 0; index < stylesheets.length; index++) {
+      var sheet = stylesheets[index];
+      if (sheet.cssRules.length <= 0 || !sheet.cssRules[0].selectorText
+           || (!sheet.cssRules[0].selectorText.startsWith(".mermaid") && !sheet.cssRules[0].selectorText.startsWith("#mermaid")))
+        continue;
+
+      var rules = sheet.cssRules;
+      for (var ruleIndex = 0; ruleIndex < rules.length; ruleIndex++) {
+        $(rules[ruleIndex].selectorText).each(function(num, elem) {
+          elem = $(elem);
+          if (elem.attr("style")) {
+            elem.attr("style", elem.attr("style") + ";" + rules[ruleIndex].style.cssText);
+          } else {
+            elem.attr("style", rules[ruleIndex].style.cssText);
+          }
+        });
+      }
+    }
+  }
+
+  function updateSVG() {
+    makeCSSInline();
+    var serializer = new XMLSerializer();
+    var svgString = serializer.serializeToString(document.querySelector("svg"));
+    $("#svgText").val(svgString);
+    return true;
+  }
+
+  function addThreatVector() {
+    elementCounter = elementCounter+1;
+    addElement("id" + elementCounter, "attack", $("#newAttack").val());
+  }
+
+  function addAsset() {
+    elementCounter = elementCounter+1;
+    addElement("id" + elementCounter, "asset", $("#newAsset").val());
+  }
+
+  function addElement(id, className, val) {
+    var newElement = "\n    " + id + "[" + val + "];";
+    graph = graph + newElement;
+    classes = classes.replace(" " + className + ";", "," + id + " " + className + ";");
+    refreshMermaid(classDefs + graph + classes);
+  }
+
+  function linkElements() {
+    if (clickedItem) {
+      var firstItemId = $(clickedItem).attr("id");
+      var secondItemId = $(this).attr("id");
+
+      var newLink = firstItemId + " --> " + secondItemId + ";";
+
+      // The link was already there. Lets undo it
+      if (graph.indexOf(newLink) != -1) {
+          graph = graph.replace("\n" + newLink, "");
+      } else {
+          graph = graph + "\n" + newLink;
+      }
+
+      refreshMermaid(classDefs + graph + classes);
+
+      clickedItem = null;
+      $(this).removeClass("highlightMermaid");
+    } else {
+      clickedItem = this;
+      $(this).addClass("highlightMermaid");
+    }
+  }
+
+  function refreshMermaid(content) {
+    mermaid.parse(content);
+    var callback = function(html) {
+        $('#svg').html(html);
+
+        $('#svg').find('text').parents('g[id^="id"]').on("click", linkElements);
+    };
+    mermaid.render('mermaid' + refreshCounter, content, callback);
+    refreshCounter = refreshCounter+1;
+  }
