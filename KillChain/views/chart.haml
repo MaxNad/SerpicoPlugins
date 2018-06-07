@@ -45,18 +45,13 @@
 
   var elementCounter = 6;
   var refreshCounter = 1;
-  var classDefs = `graph LR
-    classDef asset fill:#008000,stroke-width:0px;
-    classDef attack fill:#FF0000,stroke-width:0px;`;
 
-  var graph = `
-    id1((Start));`;
+  var classDefsStart = "graph LR";
 
-  var classes = `
-    class id0 asset;
-    class id0 attack;`;
+  var classDefs = #{@classDefs.to_json};
+  var graphElements = #{@graphElements.to_json};
 
-  $("#svg").html(classDefs + graph + classes);
+  $("#svg").html(makeGraph());
 
   var config = {
     startOnLoad:true,
@@ -119,27 +114,40 @@
   }
 
   function addElement(id, className, val) {
-    var newElement = "\n    " + id + "[" + val + "];";
-    graph = graph + newElement;
-    classes = classes.replace(" " + className + ";", "," + id + " " + className + ";");
-    refreshMermaid(classDefs + graph + classes);
+    var newElement = {
+      "key_name": id,
+      "name": val,
+      "classDef": findClassDefByName(className),
+      "relationships": []
+    };
+    graphElements.push(newElement);
+    refreshMermaid(makeGraph());
   }
 
   function linkElements() {
     if (clickedItem) {
-      var firstItemId = $(clickedItem).attr("id");
-      var secondItemId = $(this).attr("id");
+      var firstItem = findElementByKeyName($(clickedItem).attr("id"));
+      var secondItem = findElementByKeyName($(this).attr("id"));
 
-      var newLink = firstItemId + " --> " + secondItemId + ";";
-
-      // The link was already there. Lets undo it
-      if (graph.indexOf(newLink) != -1) {
-          graph = graph.replace("\n" + newLink, "");
-      } else {
-          graph = graph + "\n" + newLink;
+      if (!firstItem.relationships) {
+        firstItem.relationships = [];
       }
 
-      refreshMermaid(classDefs + graph + classes);
+      var relationshipIndex = getRelationshipIndex(firstItem, secondItem.key_name);
+
+      // The link was already there. Lets undo it
+      if (relationshipIndex != -1) {
+        firstItem.relationships.splice(relationshipIndex,1);
+      } else {
+        var newRelationship = {
+          "from": firstItem.key_name,
+          "to": secondItem.key_name
+        };
+
+        firstItem.relationships.push(newRelationship);
+      }
+
+      refreshMermaid(makeGraph());
 
       clickedItem = null;
       $(this).removeClass("highlightMermaid");
@@ -158,4 +166,77 @@
     };
     mermaid.render('mermaid' + refreshCounter, content, callback);
     refreshCounter = refreshCounter+1;
+  }
+
+  function makeGraph() {
+    // Class definitions
+    var classList = [];
+    var graph = classDefsStart + "\n";
+
+    for (var index = 0; index < classDefs.length; index++) {
+      graph += "classDef " + classDefs[index].name + " " + classDefs[index].css + ";\n";
+      classList.push(classDefs[index].name);
+    }
+
+    // Graph Elements
+    if (graphElements.length > 0) {
+      for (var index = 0; index < graphElements.length; index++) {
+        var currentElement = graphElements[index];
+
+        if (currentElement.is_start) {
+          graph += currentElement.key_name + "((\"" + currentElement.name + "\"));\n";
+        } else {
+          graph += currentElement.key_name + "[\"" + currentElement.name + "\"];\n";
+        }
+
+        // RelationShips
+        if (currentElement.relationships) {
+          for (var relationshipIndex = 0; relationshipIndex < currentElement.relationships.length; relationshipIndex++) {
+            graph += currentElement.relationships[relationshipIndex].from + " --> " + currentElement.relationships[relationshipIndex].to + ";\n";
+          }
+        }
+
+        // Classes
+        if (currentElement.classDef) {
+          graph += "class " + currentElement.key_name + " " + currentElement.classDef.name + ";\n";
+        }
+      }
+    } else {
+      // Fix for the fact that mermaid graphs doesn't support empty class section
+      for (var index = 0; index < classList.length; index++) {
+        graph += "class id0 " + classList[index] + ";\n";
+      }
+    }
+
+    return graph;
+  }
+
+  function findClassDefByName(name) {
+    for (var index = 0; index < classDefs.length; index++) {
+      if (classDefs[index].name === name) {
+        return classDefs[index];
+      }
+    }
+
+    return null;
+  }
+
+  function findElementByKeyName(keyName) {
+    for (var index = 0; index < graphElements.length; index++) {
+      if (graphElements[index].key_name === keyName) {
+        return graphElements[index];
+      }
+    }
+
+    return null;
+  }
+
+  function getRelationshipIndex(obj, otherId) {
+    for (var index = 0; index < obj.relationships.length; index++) {
+      if (obj.relationships[index].to === otherId) {
+        return index;
+      }
+    }
+
+    return -1;
   }
