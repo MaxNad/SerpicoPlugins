@@ -110,7 +110,7 @@ post '/KillChain' do
 
 		@relationships_ids = json_relationships.collect{ |obj| obj["id"] }
 		@deletedRelations = Relationship.all(diagram_id: @diagram.id, :id.not => @relationships_ids)
-		return @deletedRelations.to_json
+		@deletedRelations.destroy
 
 		json_relationships.each do |item|
 			@relationship = Relationship.first(id: item["id"])
