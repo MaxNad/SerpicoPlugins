@@ -21,7 +21,7 @@ class Element
     property :id, Serial
     property :name, String, :required => true, :length => 500
     property :key_name, String, :required => true, :length => 25
-    property :is_start, Boolean, :required => true, :default => false
+    property :is_start, Boolean, :required => false, :default => false
     property :class_id, Integer, :required => false
     property :diagram_id, Integer, :required => true
 
@@ -31,8 +31,9 @@ class Relationship
     include DataMapper::Resource
 
     property :id, Serial
-    property :from_id, Integer, :required => true
-    property :to_key, String, :required => false
+    property :from_key, String, :required => true
+    property :to_key, String, :required => true
+    property :diagram_id, Integer, :required => true
 
 end
 

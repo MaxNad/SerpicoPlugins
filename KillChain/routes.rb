@@ -2,6 +2,8 @@ require 'sinatra'
 require 'rmagick'
 require './plugins/KillChain/model/diagrams'
 
+require 'json'
+
 get '/KillChain/public/:file' do
 	send_file('plugins/KillChain/public/'+params[:file], :disposition => 'inline')
 end
@@ -54,6 +56,7 @@ get '/KillChain' do
 		else
 			@classDefs = ClassDefinitions.all(diagram_id: @diagram.id)
 			@graphElements = Element.all(diagram_id: @diagram.id)
+			@relationships = Relationship.all(diagram_id: @diagram.id)
 		end
 	}
 
@@ -72,6 +75,10 @@ post '/KillChain' do
   return 'No Such Report' if report.nil?
 
 	svg_string = data['svgText']
+	graph_element = data['graphElements']
+	relationships = data['relationships']
+	json_elements = JSON.parse(graph_element)
+	json_relationships = JSON.parse(relationships)
 
 	img = Magick::Image.from_blob(svg_string) {
 	  self.format = 'SVG'
@@ -80,6 +87,45 @@ post '/KillChain' do
 
 	DataMapper.repository(:diagrams) {
 		@diagram = Diagram.first(report_id: report_id)
+		@relationships = Relationship.all(diagram_id: @diagram.id)
+
+		json_elements.each do |item|
+			@graphElement = Element.first(id: item["id"])
+			if @graphElement
+				@graphElement.name = item["name"]
+				@graphElement.key_name = item["key_name"]
+				@graphElement.is_start = item["is_start"]
+				@graphElement.class_id = item["class_id"]
+				@graphElement.save
+			else
+				@graphElement = Element.new
+				@graphElement.name = item["name"]
+				@graphElement.key_name = item["key_name"]
+				@graphElement.is_start = item["is_start"]
+				@graphElement.class_id = item["class_id"]
+		    @graphElement.diagram_id = @diagram.id
+				@graphElement.save
+			end
+		end
+
+		@relationships_ids = json_relationships.collect{ |obj| obj["id"] }
+		@deletedRelations = Relationship.all(diagram_id: @diagram.id, :id.not => @relationships_ids)
+		return @deletedRelations.to_json
+
+		json_relationships.each do |item|
+			@relationship = Relationship.first(id: item["id"])
+			if @relationship
+				@relationship.from_key = item["from_key"]
+				@relationship.to_key = item["to_key"]
+				@relationship.save
+			else
+				@relationship = Relationship.new
+				@relationship.from_key = item["from_key"]
+				@relationship.to_key = item["to_key"]
+		    @relationship.diagram_id = @diagram.id
+				@relationship.save
+			end
+		end
 	}
 
 	@attachment = Attachments.first(id: @diagram.attachment_id)

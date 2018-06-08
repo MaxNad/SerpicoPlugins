@@ -19,7 +19,9 @@
     %input#svgText{ :name => "svgText", :type => "hidden" }
 
     %br
-    %input{:type => "hidden", :name => "report_id", :value => "#{@report_id}"}
+    %input{ :type => "hidden", :name => "report_id", :value => "#{@report_id}" }
+    %input#graphElements{ :type => "hidden", :name => "graphElements" }
+    %input#relationships{ :type => "hidden", :name => "relationships" }
     %input.btn.btn-default#btnSubmit{ :type => "submit", :value => "Save" }
     %a.btn.btn-default{ :href => "/" }
       Cancel
@@ -43,24 +45,24 @@
 
   var clickedItem;
 
-  var elementCounter = 6;
-  var refreshCounter = 1;
-
   var classDefsStart = "graph LR";
 
   var classDefs = #{@classDefs.to_json};
   var graphElements = #{@graphElements.to_json};
+  var relationships = #{@relationships.to_json} || [];
 
-  $("#svg").html(makeGraph());
+  var elementCounter = graphElements.length;
+  var refreshCounter = 1;
 
   var config = {
-    startOnLoad:true,
+    startOnLoad:false,
     flowchart:{
         useMaxWidth:false,
         htmlLabels:false
     }
   };
   mermaid.initialize(config);
+  refreshMermaid(makeGraph());
 
   $("#formSVG").on("submit", updateSVG);
   $("#btnAddAsset").on("click", addAsset);
@@ -100,6 +102,10 @@
     var serializer = new XMLSerializer();
     var svgString = serializer.serializeToString(document.querySelector("svg"));
     $("#svgText").val(svgString);
+
+    $("#graphElements").val(JSON.stringify(graphElements));
+    $("#relationships").val(JSON.stringify(relationships));
+
     return true;
   }
 
@@ -117,8 +123,7 @@
     var newElement = {
       "key_name": id,
       "name": val,
-      "classDef": findClassDefByName(className),
-      "relationships": []
+      "class_id": findClassDefByName(className).id
     };
     graphElements.push(newElement);
     refreshMermaid(makeGraph());
@@ -129,22 +134,17 @@
       var firstItem = findElementByKeyName($(clickedItem).attr("id"));
       var secondItem = findElementByKeyName($(this).attr("id"));
 
-      if (!firstItem.relationships) {
-        firstItem.relationships = [];
-      }
-
-      var relationshipIndex = getRelationshipIndex(firstItem, secondItem.key_name);
+      var relationshipIndex = getRelationshipIndex(firstItem.key_name, secondItem.key_name);
 
       // The link was already there. Lets undo it
       if (relationshipIndex != -1) {
-        firstItem.relationships.splice(relationshipIndex,1);
+        relationships.splice(relationshipIndex,1);
       } else {
         var newRelationship = {
-          "from": firstItem.key_name,
-          "to": secondItem.key_name
+          "from_key": firstItem.key_name,
+          "to_key": secondItem.key_name
         };
-
-        firstItem.relationships.push(newRelationship);
+        relationships.push(newRelationship);
       }
 
       refreshMermaid(makeGraph());
@@ -189,17 +189,16 @@
           graph += currentElement.key_name + "[\"" + currentElement.name + "\"];\n";
         }
 
-        // RelationShips
-        if (currentElement.relationships) {
-          for (var relationshipIndex = 0; relationshipIndex < currentElement.relationships.length; relationshipIndex++) {
-            graph += currentElement.relationships[relationshipIndex].from + " --> " + currentElement.relationships[relationshipIndex].to + ";\n";
-          }
-        }
-
         // Classes
-        if (currentElement.classDef) {
-          graph += "class " + currentElement.key_name + " " + currentElement.classDef.name + ";\n";
+        if (currentElement.class_id && currentElement.class_id >= 0) {
+          var elementClass = findClassDefById(currentElement.class_id);
+          graph += "class " + currentElement.key_name + " " + elementClass.name + ";\n";
         }
+      }
+
+      // RelationShips
+      for (var relationshipIndex = 0; relationshipIndex < relationships.length; relationshipIndex++) {
+        graph += relationships[relationshipIndex].from_key + " --> " + relationships[relationshipIndex].to_key + ";\n";
       }
     } else {
       // Fix for the fact that mermaid graphs doesn't support empty class section
@@ -209,6 +208,16 @@
     }
 
     return graph;
+  }
+
+  function findClassDefById(id) {
+    for (var index = 0; index < classDefs.length; index++) {
+      if (classDefs[index].id === id) {
+        return classDefs[index];
+      }
+    }
+
+    return null;
   }
 
   function findClassDefByName(name) {
@@ -231,9 +240,10 @@
     return null;
   }
 
-  function getRelationshipIndex(obj, otherId) {
-    for (var index = 0; index < obj.relationships.length; index++) {
-      if (obj.relationships[index].to === otherId) {
+  function getRelationshipIndex(fromKey, toKey) {
+    for (var index = 0; index < relationships.length; index++) {
+      if (relationships[index].from_key === fromKey
+          && relationships[index].to_key === toKey) {
         return index;
       }
     }
