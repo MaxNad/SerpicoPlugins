@@ -48,8 +48,8 @@ class ClassDefinitions
 end
 
 DataMapper.repository(:diagrams) {
-  Diagram.auto_migrate!
-  Element.auto_migrate!
-  Relationship.auto_migrate!
-  ClassDefinitions.auto_migrate!
+  Diagram.auto_upgrade!
+  Element.auto_upgrade!
+  Relationship.auto_upgrade!
+  ClassDefinitions.auto_upgrade!
 }

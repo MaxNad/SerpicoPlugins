@@ -89,6 +89,10 @@ post '/KillChain' do
 		@diagram = Diagram.first(report_id: report_id)
 		@relationships = Relationship.all(diagram_id: @diagram.id)
 
+		@elements_ids = json_elements.collect{ |obj| obj["id"] }
+		@deletedElements = Element.all(diagram_id: @diagram.id, :id.not => @elements_ids)
+		@deletedElements.destroy
+
 		json_elements.each do |item|
 			@graphElement = Element.first(id: item["id"])
 			if @graphElement
@@ -119,11 +123,15 @@ post '/KillChain' do
 				@relationship.to_key = item["to_key"]
 				@relationship.save
 			else
-				@relationship = Relationship.new
-				@relationship.from_key = item["from_key"]
-				@relationship.to_key = item["to_key"]
-		    @relationship.diagram_id = @diagram.id
-				@relationship.save
+				@relationship = Relationship.first(diagram_id: @diagram.id, from_key: item["from_key"], to_key: item["to_key"])
+
+				if !@relationship
+					@relationship = Relationship.new
+					@relationship.from_key = item["from_key"]
+					@relationship.to_key = item["to_key"]
+			    @relationship.diagram_id = @diagram.id
+					@relationship.save
+				end
 			end
 		end
 	}
